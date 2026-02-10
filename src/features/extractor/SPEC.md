@@ -11,14 +11,49 @@
 - [x] PDF 渲染最多 50 页（OOM 保护）
 - [x] 文件大小限制 100MB（所有类型）
 - [x] LLM 调用使用流式响应，实时展示提取进度
+- [x] PDF 上传后进入页码选择步骤，用户可选择要提取的页码范围
+- [x] 提取过程中可随时停止，保留已提取结果
+- [x] 提取失败或跳过的页面支持单页重试
 
 ## 数据流
 
 ```
 用户上传文件
-├── PDF  → pdfjs 渲染为 PNG[] → 逐页 POST /api/extract (streaming) → Markdown[]
-├── 图片 → FileReader.readAsDataURL → POST /api/extract (streaming) → Markdown
-└── DOCX → POST /api/convert-docx (FormData) → mammoth→HTML→turndown→Markdown
+├── PDF  → pdfjs 渲染为 PNG[] → 页码选择 → 逐页 POST /api/extract (streaming) → PageResult[]
+├── 图片 → FileReader.readAsDataURL → POST /api/extract (streaming) → PageResult
+└── DOCX → POST /api/convert-docx (FormData) → mammoth→HTML→turndown→PageResult
+```
+
+## 页码选择规则
+| 场景 | 预期行为 |
+|------|----------|
+| PDF 上传完成 | 进入页码选择步骤，默认全选 |
+| 单张图片上传 | 跳过选择步骤，直接提取 |
+| DOCX 上传 | 跳过选择步骤，直接转换 |
+| 页码范围输入 | 支持 `1-5, 8, 10-15` 格式，自动裁剪越界页码 |
+| 无效输入 | 静默忽略非数字/非范围片段 |
+| 未选择任何页面 | 「开始提取」按钮禁用 |
+
+## 停止提取规则
+| 场景 | 预期行为 |
+|------|----------|
+| 点击「停止提取」 | 中止当前请求，标记未完成页为 `skipped`，进入 `done` 步骤 |
+| 停止后 | 已成功提取的页面保留，可复制/下载 |
+| 已跳过的页面 | 显示「未提取」状态 + 「提取此页」按钮 |
+
+## 重试规则
+| 场景 | 预期行为 |
+|------|----------|
+| 页面提取失败 | 显示红色错误栏 + 「重试」按钮 |
+| 页面被跳过 | 显示「未提取」+ 「提取此页」按钮 |
+| 点击重试/提取此页 | 对单页重新调用 LLM，流式更新结果 |
+| 重试成功 | 状态变为 `success`，正常显示 Markdown |
+
+## PageResult 状态机
+```
+pending → extracting → success
+                    → error    → (retryPage) → extracting → ...
+       → skipped               → (retryPage) → extracting → ...
 ```
 
 ## 边缘情况
@@ -27,12 +62,21 @@
 | PDF 超过 50 页 | 仅渲染前 50 页，控制台 warn |
 | 文件超过 100MB | 显示错误提示，阻止上传 |
 | LLM API 配置缺失 | 弹出设置对话框 |
-| LLM 调用失败 | 在对应页显示 ⚠️ 错误信息，继续处理后续页 |
+| LLM 调用失败 | 在对应页显示错误信息和重试按钮，继续处理后续页 |
 | 同一文件重复上传 | input 已重置，可正常触发 |
 | 剪贴板 API 不可用 | 静默失败，不影响其他功能 |
 | 非支持格式文件 | 显示格式限制错误提示 |
+| 复制/下载全部 | 仅包含 status=success 的页面 |
+
+## 文件名规则
+
+- 上传时保留原始文件名（去除扩展名）
+- 下载全部：`{原始文件名}.md`（无文件名时回退 `extracted_document.md`）
+- 下载单页：`{原始文件名}_001.md`（三位零填充页码）
 
 ## 变更记录
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
+| 2026-02-11 | 新增页码选择、停止提取、单页重试规则；新增 PageResult 状态机 | 提取流程增强 |
+| 2026-02-10 | 添加文件名规则 | 下载文件名功能 |
 | 2026-02-10 | 初始版本 | 项目审查后补充 |

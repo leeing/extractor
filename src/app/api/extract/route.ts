@@ -69,7 +69,7 @@ export async function POST(req: Request): Promise<Response> {
               image_url: {
                 url: imageBase64.startsWith("data:")
                   ? imageBase64
-                  : `data:image/png;base64,${imageBase64}`,
+                  : `data:image/jpeg;base64,${imageBase64}`,
               },
             },
           ],
@@ -77,7 +77,11 @@ export async function POST(req: Request): Promise<Response> {
       ],
     });
 
-    // Convert OpenAI stream to a ReadableStream of plain text chunks
+    // Convert OpenAI stream to a ReadableStream of plain text chunks.
+    // If the LLM stream errors mid-way, we write a sentinel error line
+    // into the stream so the client can detect it, instead of calling
+    // controller.error() which abruptly kills the connection and causes
+    // an opaque "Failed to fetch" TypeError on the client side.
     const readable = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -89,7 +93,10 @@ export async function POST(req: Request): Promise<Response> {
             }
           }
         } catch (err) {
-          controller.error(err);
+          const msg = err instanceof Error ? err.message : "LLM 流式响应中断";
+          controller.enqueue(
+            encoder.encode(`\n\n<!--EXTRACT_STREAM_ERROR:${msg}-->`),
+          );
         } finally {
           controller.close();
         }

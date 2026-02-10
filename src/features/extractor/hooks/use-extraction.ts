@@ -6,10 +6,31 @@ import { getDecodedConfig } from "@/features/settings/context";
 import type { ModelConfig } from "@/features/settings/types";
 
 /** Pipeline step */
-export type Step = "upload" | "extract" | "done";
+export type Step = "upload" | "select" | "extract" | "done";
 
 /** Uploaded file type */
 export type FileType = "pdf" | "docx" | "image";
+
+/** Per-page extraction status */
+export type PageStatus =
+  | "pending"
+  | "extracting"
+  | "success"
+  | "error"
+  | "skipped";
+
+/** Structured result for a single page */
+export interface PageResult {
+  imageIndex: number;
+  pageNumber: number;
+  status: PageStatus;
+  markdown: string;
+  errorMessage?: string | undefined;
+}
+
+function stripExtension(name: string): string {
+  return name.replace(/\.[^.]+$/, "");
+}
 
 /** DOCX API response shape */
 interface DocxApiResponse {
@@ -27,15 +48,22 @@ interface UseExtractionOptions {
 interface UseExtractionReturn {
   step: Step;
   fileType: FileType;
+  fileName: string;
   extractionImages: string[];
-  allMarkdown: string[];
+  pageResults: PageResult[];
   extractingIdx: number;
   isExtracting: boolean;
   streamingMarkdown: string;
   totalPages: number;
-  handlePagesRendered: (renderedPages: RenderedPage[]) => void;
-  handleImageUploaded: (dataUrl: string) => void;
+  handlePagesRendered: (
+    renderedPages: RenderedPage[],
+    originalFileName: string,
+  ) => void;
+  handleImageUploaded: (dataUrl: string, originalFileName: string) => void;
   handleDocxUploaded: (file: File) => void;
+  handleStartSelectedExtraction: (selectedIndices: number[]) => void;
+  handleStop: () => void;
+  retryPage: (resultIndex: number) => void;
   handleReset: () => void;
 }
 
@@ -44,6 +72,7 @@ interface UseExtractionReturn {
  * - LLM-based page-by-page extraction for PDF/image
  * - DOCX conversion via /api/convert-docx
  * - Streaming state management
+ * - Stop / retry / page selection
  */
 export function useExtraction({
   hasAnyConfig,
@@ -53,10 +82,11 @@ export function useExtraction({
   const [step, setStep] = useState<Step>("upload");
   const [fileType, setFileType] = useState<FileType>("pdf");
   const [extractionImages, setExtractionImages] = useState<string[]>([]);
-  const [allMarkdown, setAllMarkdown] = useState<string[]>([]);
+  const [pageResults, setPageResults] = useState<PageResult[]>([]);
   const [extractingIdx, setExtractingIdx] = useState(0);
   const [isExtracting, setIsExtracting] = useState(false);
   const [streamingMarkdown, setStreamingMarkdown] = useState("");
+  const [fileName, setFileName] = useState("");
 
   // Refs to avoid stale closures
   const hasAnyConfigRef = useRef(hasAnyConfig);
@@ -64,10 +94,110 @@ export function useExtraction({
   const activeConfigRef = useRef(activeConfig);
   activeConfigRef.current = activeConfig;
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pageResultsRef = useRef<PageResult[]>([]);
+  const extractionImagesRef = useRef<string[]>([]);
 
-  // Core extraction: call LLM page by page
+  /**
+   * Extract a single page by image index. Returns updated PageResult.
+   * Used by both startExtraction loop and retryPage.
+   */
+  const extractSinglePage = useCallback(
+    async (
+      imageDataUrl: string,
+      imageIndex: number,
+      pageNumber: number,
+      signal: AbortSignal,
+      onStream: (markdown: string) => void,
+    ): Promise<PageResult> => {
+      const currentConfig = activeConfigRef.current;
+      const decoded = currentConfig ? getDecodedConfig(currentConfig) : null;
+
+      try {
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: imageDataUrl,
+            baseUrl: decoded?.baseUrl ?? "",
+            modelId: decoded?.modelId ?? "",
+            apiKey: decoded?.apiKey ?? "",
+            customPrompt: decoded?.customPrompt ?? "",
+          }),
+          signal,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          let errorDetail = errText;
+          try {
+            const parsed = JSON.parse(errText) as { error?: string };
+            if (parsed.error) errorDetail = parsed.error;
+          } catch {
+            // Not JSON, use raw text
+          }
+          return {
+            imageIndex,
+            pageNumber,
+            status: "error",
+            markdown: "",
+            errorMessage: `第 ${pageNumber} 页提取失败: ${errorDetail}`,
+          };
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let pageMarkdown = "";
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            pageMarkdown += chunk;
+            onStream(pageMarkdown);
+          }
+        }
+
+        // Check for inline stream error sentinel written by the API route
+        // when the LLM stream breaks mid-way.
+        const streamErrMatch = pageMarkdown.match(
+          /<!--EXTRACT_STREAM_ERROR:(.+?)-->\s*$/,
+        );
+        if (streamErrMatch) {
+          return {
+            imageIndex,
+            pageNumber,
+            status: "error",
+            markdown: "",
+            errorMessage: `第 ${pageNumber} 页提取失败: ${streamErrMatch[1]}`,
+          };
+        }
+
+        return {
+          imageIndex,
+          pageNumber,
+          status: "success",
+          markdown: pageMarkdown,
+        };
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw err; // Let caller handle abort
+        }
+        return {
+          imageIndex,
+          pageNumber,
+          status: "error",
+          markdown: "",
+          errorMessage: `第 ${pageNumber} 页提取失败: ${err instanceof Error ? err.message : "网络错误"}`,
+        };
+      }
+    },
+    [],
+  );
+
+  // Core extraction: call LLM page by page for selected indices
   const startExtraction = useCallback(
-    async (images: string[]) => {
+    async (images: string[], selectedIndices: number[]) => {
       if (!hasAnyConfigRef.current) {
         onConfigMissing();
         return;
@@ -76,105 +206,198 @@ export function useExtraction({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
+      // Build initial pageResults array
+      const initialResults: PageResult[] = selectedIndices.map((imgIdx) => ({
+        imageIndex: imgIdx,
+        pageNumber: imgIdx + 1,
+        status: "pending" as PageStatus,
+        markdown: "",
+      }));
+      setPageResults(initialResults);
+      pageResultsRef.current = initialResults;
+
       setIsExtracting(true);
       setExtractingIdx(0);
-      const results: string[] = [];
-      const currentConfig = activeConfigRef.current;
-      const decoded = currentConfig ? getDecodedConfig(currentConfig) : null;
+      setStep("extract");
 
-      for (let i = 0; i < images.length; i++) {
+      for (let i = 0; i < selectedIndices.length; i++) {
         if (controller.signal.aborted) break;
 
+        const imgIdx = selectedIndices[i];
+        if (imgIdx === undefined) continue;
         setExtractingIdx(i);
         setStreamingMarkdown("");
 
+        // Mark current page as extracting
+        const updatingResults = [...pageResultsRef.current];
+        const currentResult = updatingResults[i];
+        if (currentResult) {
+          updatingResults[i] = { ...currentResult, status: "extracting" };
+        }
+        setPageResults(updatingResults);
+        pageResultsRef.current = updatingResults;
+
         try {
-          const response = await fetch("/api/extract", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              imageBase64: images[i],
-              baseUrl: decoded?.baseUrl ?? "",
-              modelId: decoded?.modelId ?? "",
-              apiKey: decoded?.apiKey ?? "",
-              customPrompt: decoded?.customPrompt ?? "",
-            }),
-            signal: controller.signal,
-          });
+          const imageData = images[imgIdx];
+          if (!imageData) continue;
+          const result = await extractSinglePage(
+            imageData,
+            imgIdx,
+            imgIdx + 1,
+            controller.signal,
+            (md) => setStreamingMarkdown(md),
+          );
 
-          if (!response.ok) {
-            const errText = await response.text();
-            results.push(`> ⚠️ 第 ${i + 1} 页提取失败: ${errText}`);
-            setAllMarkdown([...results]);
-            continue;
-          }
-
-          // Read the streaming response
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          let pageMarkdown = "";
-
-          if (reader) {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              pageMarkdown += chunk;
-              setStreamingMarkdown(pageMarkdown);
-            }
-          }
-
-          results.push(pageMarkdown);
-          setAllMarkdown([...results]);
+          const afterResults = [...pageResultsRef.current];
+          afterResults[i] = result;
+          setPageResults(afterResults);
+          pageResultsRef.current = afterResults;
         } catch (err) {
           if (err instanceof DOMException && err.name === "AbortError") {
+            // handleStop already cleaned up state
             return;
           }
-          results.push(
-            `> ⚠️ 第 ${i + 1} 页提取失败: ${err instanceof Error ? err.message : "网络错误"}`,
-          );
-          setAllMarkdown([...results]);
         }
       }
 
+      setStreamingMarkdown("");
       setIsExtracting(false);
       setStep("done");
     },
-    [onConfigMissing],
+    [onConfigMissing, extractSinglePage],
   );
 
+  /** Stop ongoing extraction — preserve completed results, mark rest as skipped */
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
+    const current = pageResultsRef.current;
+    const updated = current.map((r) =>
+      r.status === "pending" || r.status === "extracting"
+        ? { ...r, status: "skipped" as PageStatus }
+        : r,
+    );
+    setPageResults(updated);
+    pageResultsRef.current = updated;
+
+    setStreamingMarkdown("");
+    setIsExtracting(false);
+    setStep("done");
+  }, []);
+
+  /** Retry a single page by its index in pageResults */
+  const retryPage = useCallback(
+    async (resultIndex: number) => {
+      if (!hasAnyConfigRef.current) {
+        onConfigMissing();
+        return;
+      }
+
+      const images = extractionImagesRef.current;
+      const target = pageResultsRef.current[resultIndex];
+      if (!target) return;
+
+      const controller = new AbortController();
+      // Don't overwrite the main controller if a batch extraction is running
+      // This is a single-page retry
+
+      // Mark as extracting
+      const updating = [...pageResultsRef.current];
+      updating[resultIndex] = {
+        ...target,
+        status: "extracting",
+        markdown: "",
+        errorMessage: undefined,
+      };
+      setPageResults(updating);
+      pageResultsRef.current = updating;
+
+      setStreamingMarkdown("");
+
+      const imageData = images[target.imageIndex];
+      if (!imageData) return;
+
+      try {
+        const result = await extractSinglePage(
+          imageData,
+          target.imageIndex,
+          target.pageNumber,
+          controller.signal,
+          (md) => setStreamingMarkdown(md),
+        );
+
+        const afterResults = [...pageResultsRef.current];
+        afterResults[resultIndex] = result;
+        setPageResults(afterResults);
+        pageResultsRef.current = afterResults;
+      } catch {
+        // AbortError for single retry — just restore error state
+        const afterResults = [...pageResultsRef.current];
+        afterResults[resultIndex] = {
+          ...target,
+          status: "error",
+          errorMessage: "重试被中断",
+        };
+        setPageResults(afterResults);
+        pageResultsRef.current = afterResults;
+      } finally {
+        setStreamingMarkdown("");
+      }
+    },
+    [onConfigMissing, extractSinglePage],
+  );
+
+  /** PDF rendered → go to select step (multi-page) */
   const handlePagesRendered = useCallback(
-    (renderedPages: RenderedPage[]) => {
+    (renderedPages: RenderedPage[], originalFileName: string) => {
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
       setFileType("pdf");
-      setAllMarkdown([]);
+      setFileName(stripExtension(originalFileName));
+      setPageResults([]);
+      pageResultsRef.current = [];
       const images = renderedPages.map((p) => p.dataUrl);
       setExtractionImages(images);
-      setStep("extract");
-      startExtraction(images);
+      extractionImagesRef.current = images;
+      setStep("select");
+    },
+    [],
+  );
+
+  /** Single image → skip select, extract directly */
+  const handleImageUploaded = useCallback(
+    (dataUrl: string, originalFileName: string) => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      setFileType("image");
+      setFileName(stripExtension(originalFileName));
+      setPageResults([]);
+      pageResultsRef.current = [];
+      const images = [dataUrl];
+      setExtractionImages(images);
+      extractionImagesRef.current = images;
+      startExtraction(images, [0]);
     },
     [startExtraction],
   );
 
-  const handleImageUploaded = useCallback(
-    (dataUrl: string) => {
-      abortControllerRef.current?.abort();
-      abortControllerRef.current = null;
-      setFileType("image");
-      setAllMarkdown([]);
-      setExtractionImages([dataUrl]);
-      setStep("extract");
-      startExtraction([dataUrl]);
+  /** Start extraction for user-selected page indices */
+  const handleStartSelectedExtraction = useCallback(
+    (selectedIndices: number[]) => {
+      const images = extractionImagesRef.current;
+      startExtraction(images, selectedIndices);
     },
     [startExtraction],
   );
 
   const handleDocxUploaded = useCallback(async (file: File) => {
     setFileType("docx");
-    setAllMarkdown([]);
+    setFileName(stripExtension(file.name));
+    setPageResults([]);
+    pageResultsRef.current = [];
     setExtractionImages([]);
+    extractionImagesRef.current = [];
     setIsExtracting(true);
     setStep("extract");
     setStreamingMarkdown("");
@@ -191,17 +414,38 @@ export function useExtraction({
       const result = (await response.json()) as DocxApiResponse;
 
       if (!result.success || !result.data) {
-        setAllMarkdown([`> ⚠️ DOCX 转换失败: ${result.error ?? "未知错误"}`]);
+        const errResult: PageResult = {
+          imageIndex: 0,
+          pageNumber: 1,
+          status: "error",
+          markdown: "",
+          errorMessage: `DOCX 转换失败: ${result.error ?? "未知错误"}`,
+        };
+        setPageResults([errResult]);
+        pageResultsRef.current = [errResult];
       } else {
-        setAllMarkdown([result.data.markdown]);
+        const successResult: PageResult = {
+          imageIndex: 0,
+          pageNumber: 1,
+          status: "success",
+          markdown: result.data.markdown,
+        };
+        setPageResults([successResult]);
+        pageResultsRef.current = [successResult];
         if (result.data.messages.length > 0) {
           console.warn("DOCX conversion warnings:", result.data.messages);
         }
       }
     } catch (err) {
-      setAllMarkdown([
-        `> ⚠️ DOCX 转换失败: ${err instanceof Error ? err.message : "网络错误"}`,
-      ]);
+      const errResult: PageResult = {
+        imageIndex: 0,
+        pageNumber: 1,
+        status: "error",
+        markdown: "",
+        errorMessage: `DOCX 转换失败: ${err instanceof Error ? err.message : "网络错误"}`,
+      };
+      setPageResults([errResult]);
+      pageResultsRef.current = [errResult];
     } finally {
       setIsExtracting(false);
       setStep("done");
@@ -213,8 +457,11 @@ export function useExtraction({
     abortControllerRef.current = null;
     setStep("upload");
     setFileType("pdf");
+    setFileName("");
     setExtractionImages([]);
-    setAllMarkdown([]);
+    extractionImagesRef.current = [];
+    setPageResults([]);
+    pageResultsRef.current = [];
     setStreamingMarkdown("");
     setExtractingIdx(0);
     setIsExtracting(false);
@@ -222,15 +469,16 @@ export function useExtraction({
 
   const totalPages = Math.max(
     extractionImages.length,
-    allMarkdown.length,
+    pageResults.length,
     isExtracting ? extractingIdx + 1 : 0,
   );
 
   return {
     step,
     fileType,
+    fileName,
     extractionImages,
-    allMarkdown,
+    pageResults,
     extractingIdx,
     isExtracting,
     streamingMarkdown,
@@ -238,6 +486,9 @@ export function useExtraction({
     handlePagesRendered,
     handleImageUploaded,
     handleDocxUploaded,
+    handleStartSelectedExtraction,
+    handleStop,
+    retryPage,
     handleReset,
   };
 }

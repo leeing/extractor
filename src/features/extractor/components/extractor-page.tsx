@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { FileUpload } from "@/features/extractor/components/file-upload";
+import { PageRangeSelector } from "@/features/extractor/components/page-range-selector";
 import { ResultPanel } from "@/features/extractor/components/result-panel";
 import { useExtraction } from "@/features/extractor/hooks/use-extraction";
 import { SettingsDialog } from "@/features/settings/components/settings-dialog";
@@ -13,7 +14,9 @@ export function ExtractorPage() {
 
   const {
     step,
-    allMarkdown,
+    fileName,
+    extractionImages,
+    pageResults,
     extractingIdx,
     isExtracting,
     streamingMarkdown,
@@ -21,6 +24,9 @@ export function ExtractorPage() {
     handlePagesRendered,
     handleImageUploaded,
     handleDocxUploaded,
+    handleStartSelectedExtraction,
+    handleStop,
+    retryPage,
     handleReset,
   } = useExtraction({
     hasAnyConfig,
@@ -28,26 +34,30 @@ export function ExtractorPage() {
     onConfigMissing: () => setSettingsOpen(true),
   });
 
-  // Download all markdown
+  // Download all markdown (only successful pages)
   const handleDownloadAll = useCallback(() => {
-    const combined = allMarkdown
-      .map((md, i) => `<!-- Page ${i + 1} -->\n\n${md}`)
+    const successResults = pageResults.filter((r) => r.status === "success");
+    const combined = successResults
+      .map((r) => `<!-- Page ${r.pageNumber} -->\n\n${r.markdown}`)
       .join("\n\n---\n\n");
     const blob = new Blob([combined], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "extracted_document.md";
+    a.download = `${fileName || "extracted_document"}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [allMarkdown]);
+  }, [pageResults, fileName]);
 
-  // Copy all markdown
+  // Copy all markdown (only successful pages)
   const [copiedAll, setCopiedAll] = useState(false);
   const [copyAllFailed, setCopyAllFailed] = useState(false);
   const handleCopyAll = useCallback(async () => {
     try {
-      const combined = allMarkdown.join("\n\n---\n\n");
+      const successResults = pageResults.filter((r) => r.status === "success");
+      const combined = successResults
+        .map((r) => r.markdown)
+        .join("\n\n---\n\n");
       await navigator.clipboard.writeText(combined);
       setCopiedAll(true);
       setTimeout(() => setCopiedAll(false), 2000);
@@ -56,7 +66,10 @@ export function ExtractorPage() {
       setCopyAllFailed(true);
       setTimeout(() => setCopyAllFailed(false), 2000);
     }
-  }, [allMarkdown]);
+  }, [pageResults]);
+
+  const successCount = pageResults.filter((r) => r.status === "success").length;
+  const hasResults = pageResults.length > 0;
 
   return (
     <>
@@ -66,26 +79,30 @@ export function ExtractorPage() {
       />
 
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/80">
+      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="flex items-center gap-3 transition-opacity hover:opacity-80"
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 text-white text-sm font-bold">
               E
             </div>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-lg font-semibold text-zinc-900">
               Document Extractor
             </h1>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
             {activeConfig && (
-              <span className="hidden sm:inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <span className="hidden sm:inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                 {activeConfig.name}
               </span>
             )}
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
             >
               <svg
                 className="h-4 w-4"
@@ -118,16 +135,14 @@ export function ExtractorPage() {
         {step === "upload" && (
           <div className="mx-auto max-w-2xl space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                文档智能提取
-              </h2>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              <h2 className="text-2xl font-bold text-zinc-900">文档智能提取</h2>
+              <p className="mt-2 text-sm text-zinc-500">
                 上传 PDF、Word (.docx) 或图片，智能转换为 Markdown
               </p>
             </div>
 
             {!hasAnyConfig && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 ⚠️ PDF / 图片提取需要先配置 LLM 模型。请{" "}
                 <button
                   type="button"
@@ -141,7 +156,7 @@ export function ExtractorPage() {
             )}
 
             {envConfig?.isConfigured && !activeConfig && (
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/20 dark:text-green-400">
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 ✅ 已检测到环境变量配置：{envConfig.modelId}
                 （可在设置中自定义覆盖）
               </div>
@@ -156,25 +171,42 @@ export function ExtractorPage() {
           </div>
         )}
 
-        {/* Step: Extract (streaming) */}
+        {/* Step: Select pages */}
+        {step === "select" && (
+          <PageRangeSelector
+            images={extractionImages}
+            onStartExtraction={handleStartSelectedExtraction}
+          />
+        )}
+
+        {/* Step: Extract (streaming) / Done */}
         {(step === "extract" || step === "done") && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              <h2 className="text-lg font-semibold text-zinc-900">
                 提取结果
                 {isExtracting && (
                   <span className="ml-2 text-sm font-normal text-zinc-500">
-                    ({extractingIdx + 1}/{totalPages})
+                    ({extractingIdx + 1}/{pageResults.length})
                   </span>
                 )}
               </h2>
               <div className="flex gap-2">
-                {step === "done" && (
+                {isExtracting && (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+                  >
+                    停止提取
+                  </button>
+                )}
+                {step === "done" && successCount > 0 && (
                   <>
                     <button
                       type="button"
                       onClick={handleCopyAll}
-                      className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
                     >
                       {copyAllFailed
                         ? "复制失败"
@@ -194,7 +226,7 @@ export function ExtractorPage() {
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
                 >
                   重新开始
                 </button>
@@ -202,27 +234,27 @@ export function ExtractorPage() {
             </div>
 
             {/* Show results per page */}
-            <div className="space-y-4">
-              {allMarkdown.map((md, i) => (
-                <ResultPanel
-                  key={`page-result-${i}`}
-                  markdown={md}
-                  isStreaming={false}
-                  pageNumber={i + 1}
-                  totalPages={totalPages}
-                />
-              ))}
-
-              {/* Currently streaming page */}
-              {isExtracting && extractingIdx >= allMarkdown.length && (
-                <ResultPanel
-                  markdown={streamingMarkdown}
-                  isStreaming={true}
-                  pageNumber={extractingIdx + 1}
-                  totalPages={totalPages}
-                />
-              )}
-            </div>
+            {hasResults && (
+              <div className="space-y-4">
+                {pageResults.map((pr, i) => (
+                  <ResultPanel
+                    key={`page-result-${pr.imageIndex}`}
+                    markdown={
+                      pr.status === "extracting"
+                        ? streamingMarkdown
+                        : pr.markdown
+                    }
+                    isStreaming={pr.status === "extracting"}
+                    pageNumber={pr.pageNumber}
+                    totalPages={totalPages}
+                    fileName={fileName}
+                    status={pr.status}
+                    errorMessage={pr.errorMessage}
+                    onRetry={() => retryPage(i)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

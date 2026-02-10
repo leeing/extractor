@@ -1,6 +1,6 @@
 /**
  * PDF rendering service using pdfjs-dist.
- * Converts PDF pages to base64 PNG images.
+ * Converts PDF pages to base64 JPEG images.
  */
 
 import * as pdfjsLib from "pdfjs-dist";
@@ -27,7 +27,9 @@ export interface RenderedPage {
 const MAX_PAGES = 50;
 
 /**
- * Render all pages of a PDF file to base64 PNG images.
+ * Render all pages of a PDF file to base64 JPEG images.
+ * Uses JPEG (quality 0.85) instead of PNG to keep payload size
+ * within the Next.js / LLM API body-size limits.
  * If the PDF exceeds MAX_PAGES, only the first MAX_PAGES pages are rendered.
  */
 export async function renderPdfToImages(
@@ -73,7 +75,7 @@ export async function renderPdfToImages(
 
     pages.push({
       pageNumber: i,
-      dataUrl: canvas.toDataURL("image/png"),
+      dataUrl: canvas.toDataURL("image/jpeg", 0.85),
       width: viewport.width,
       height: viewport.height,
     });
