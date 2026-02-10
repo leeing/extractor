@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Document Extractor
 
-## Getting Started
+使用多模态大模型将 PDF / 图片 / Word 文档智能转换为 Markdown 格式。
 
-First, run the development server:
+## 功能
+
+- **PDF 提取**：客户端渲染 PDF 页面为图片，逐页调用 LLM 识别并转换为 Markdown
+- **图片提取**：支持 PNG、JPG、JPEG、WEBP 格式直接上传提取
+- **Word 转换**：DOCX 文件在服务端直接转换为 Markdown（无需 LLM）
+- **流式输出**：实时展示 LLM 提取进度
+- **多模型管理**：支持配置多个 LLM（Qwen-VL、GPT-4o、Gemini 等），一键切换
+
+## 技术栈
+
+- **框架**: Next.js 16 (App Router)
+- **语言**: TypeScript (strict mode)
+- **样式**: Tailwind CSS 4
+- **PDF**: pdfjs-dist
+- **DOCX**: mammoth + turndown
+- **LLM SDK**: OpenAI SDK (兼容任何 OpenAI API 格式的模型)
+
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 配置环境变量
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+编辑 `.env.local`，填入 LLM API 配置：
 
-## Learn More
+```env
+EXTRACT_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EXTRACT_MODEL_ID=qwen-vl-plus
+EXTRACT_API_KEY=sk-your-api-key-here
+```
 
-To learn more about Next.js, take a look at the following resources:
+> 也可以不配置环境变量，在页面的「模型设置」中手动添加模型配置。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. 启动开发服务器
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm dev
+```
 
-## Deploy on Vercel
+访问 [http://localhost:3000](http://localhost:3000)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 项目结构
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── config/         # 环境变量配置查询
+│   │   ├── convert-docx/   # DOCX → Markdown 转换
+│   │   └── extract/        # LLM 图片 → Markdown 流式提取
+│   ├── layout.tsx          # Root Layout
+│   └── page.tsx            # 主页面
+├── features/
+│   ├── extractor/
+│   │   ├── components/     # FileUpload, ResultPanel
+│   │   ├── hooks/          # useExtraction
+│   │   └── services/       # pdf-renderer
+│   └── settings/
+│       ├── components/     # SettingsDialog
+│       ├── context.tsx     # ModelConfigProvider
+│       └── types.ts        # ModelConfig, presets
+└── lib/
+    └── env.ts              # 环境变量类型安全访问
+```
+
+## 常用命令
+
+| 命令 | 用途 |
+|------|------|
+| `pnpm dev` | 启动开发服务器 |
+| `pnpm build` | 生产构建 |
+| `pnpm lint` | Biome lint |
+| `pnpm format` | Biome format |
