@@ -62,12 +62,6 @@ export const DEFAULT_EXTRACT_PROMPT = `你是一个专业的文档解析助手�
 export const MODEL_PRESETS: Omit<ModelConfig, "id" | "apiKey" | "isActive">[] =
   [
     {
-      name: "Qwen3-VL-32B (极算平台)",
-      baseUrl: "http://open-llm.uat.cmbchina.cn/llm/qwen3-vl-32b-instruct",
-      modelId: "qwen3-vl-32b-instruct",
-      customPrompt: DEFAULT_EXTRACT_PROMPT,
-    },
-    {
       name: "Qwen-VL-Plus (阿里云)",
       baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       modelId: "qwen-vl-plus",
@@ -80,9 +74,9 @@ export const MODEL_PRESETS: Omit<ModelConfig, "id" | "apiKey" | "isActive">[] =
       customPrompt: DEFAULT_EXTRACT_PROMPT,
     },
     {
-      name: "Gemini 2.0 Flash",
+      name: "Gemini 3.0 Flash",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-      modelId: "gemini-2.0-flash",
+      modelId: "gemini-3.0-flash",
       customPrompt: DEFAULT_EXTRACT_PROMPT,
     },
   ];
