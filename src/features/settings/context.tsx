@@ -12,6 +12,7 @@ import type { ModelConfig, RateLimitConfig } from "./types";
 import { DEFAULT_EXTRACT_PROMPT } from "./types";
 
 const STORAGE_KEY = "extractor_model_configs";
+const ACCESS_TOKEN_KEY = "extractor_access_token";
 
 function isModelConfigArray(data: unknown): data is ModelConfig[] {
   return (
@@ -35,6 +36,7 @@ export interface EnvConfig {
   modelId: string;
   hasApiKey: boolean;
   isConfigured: boolean;
+  requiresAuth: boolean;
   rateLimit?: RateLimitConfig | undefined;
 }
 
@@ -46,6 +48,8 @@ interface ModelConfigContextValue {
   hasAnyConfig: boolean;
   /** True after env config check has completed (prevents flash of "no config" warning) */
   isReady: boolean;
+  accessToken: string;
+  setAccessToken: (token: string) => void;
   addConfig: (config: Omit<ModelConfig, "id">) => void;
   updateConfig: (id: string, updates: Partial<ModelConfig>) => void;
   deleteConfig: (id: string) => void;
@@ -71,6 +75,19 @@ function saveConfigs(configs: ModelConfig[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(configs));
 }
 
+function loadAccessToken(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? "";
+}
+
+function saveAccessToken(token: string): void {
+  if (token) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+}
+
 /** Encode API key for localStorage (NOT encryption, just obfuscation) */
 export function encodeApiKey(key: string): string {
   return btoa(key);
@@ -90,25 +107,50 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
   const [envConfig, setEnvConfig] = useState<EnvConfig | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [envConfigLoaded, setEnvConfigLoaded] = useState(false);
+  const [accessToken, setAccessTokenState] = useState("");
+
+  const setAccessToken = useCallback((token: string) => {
+    setAccessTokenState(token);
+    saveAccessToken(token);
+  }, []);
 
   // Load from localStorage on mount
   useEffect(() => {
     setConfigs(loadConfigs());
+    setAccessTokenState(loadAccessToken());
     setIsLoaded(true);
   }, []);
 
   // Fetch env config from server
   useEffect(() => {
-    fetch("/api/config")
-      .then((res) => res.json())
-      .then((res: { success: boolean; data: EnvConfig }) => {
-        if (res.success) setEnvConfig(res.data);
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    fetch("/api/config", { headers })
+      .then(async (res) => {
+        if (res.status === 401) {
+          setEnvConfig({
+            baseUrl: "",
+            modelId: "",
+            hasApiKey: false,
+            isConfigured: false,
+            requiresAuth: true,
+          });
+          return;
+        }
+        const data = (await res.json()) as {
+          success: boolean;
+          data: EnvConfig;
+        };
+        if (data.success) setEnvConfig(data.data);
       })
       .catch((err: unknown) => {
         console.error("Failed to fetch env config:", err);
       })
       .finally(() => setEnvConfigLoaded(true));
-  }, []);
+  }, [accessToken]);
 
   // Persist to localStorage on change
   useEffect(() => {
@@ -185,6 +227,8 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
         envConfig,
         hasAnyConfig,
         isReady,
+        accessToken,
+        setAccessToken,
         addConfig,
         updateConfig,
         deleteConfig,

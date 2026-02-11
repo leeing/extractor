@@ -34,7 +34,8 @@ function RateLimitCountdown({ waitUntil }: { waitUntil: number }) {
 }
 
 export function ExtractorPage() {
-  const { activeConfig, hasAnyConfig, envConfig, isReady } = useModelConfig();
+  const { activeConfig, hasAnyConfig, envConfig, isReady, accessToken } =
+    useModelConfig();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const {
@@ -58,6 +59,7 @@ export function ExtractorPage() {
     hasAnyConfig,
     activeConfig,
     envConfig,
+    accessToken,
     onConfigMissing: () => setSettingsOpen(true),
   });
 

@@ -16,8 +16,16 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  const { configs, addConfig, updateConfig, deleteConfig, setActiveConfig } =
-    useModelConfig();
+  const {
+    configs,
+    addConfig,
+    updateConfig,
+    deleteConfig,
+    setActiveConfig,
+    envConfig,
+    accessToken,
+    setAccessToken,
+  } = useModelConfig();
   const [editingConfig, setEditingConfig] = useState<Omit<
     ModelConfig,
     "id"
@@ -153,6 +161,28 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {envConfig?.requiresAuth && (
+            <div className="mb-6 space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+              <label
+                htmlFor="access-token"
+                className="block text-sm font-medium text-amber-800"
+              >
+                访问密钥
+              </label>
+              <p className="text-xs text-amber-600">
+                此服务已启用访问控制，请输入管理员提供的密钥
+              </p>
+              <input
+                id="access-token"
+                type="password"
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                placeholder="请输入访问密钥"
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500"
+              />
+            </div>
+          )}
+
           {editingConfig ? (
             /* Edit Form */
             <div className="space-y-4">

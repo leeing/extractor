@@ -1,58 +1,55 @@
-/**
- * Type-safe environment variable access.
- * All server-side env vars are validated at import time.
- *
- * Lightweight alternative to t3-env for projects without Zod.
- */
+import { z } from "zod";
 
-function requireEnvOrEmpty(key: string): string {
-  return process.env[key] ?? "";
+const envSchema = z.object({
+  EXTRACT_BASE_URL: z.string().optional().default(""),
+  EXTRACT_MODEL_ID: z.string().optional().default(""),
+  EXTRACT_API_KEY: z.string().optional().default(""),
+  EXTRACT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().min(0).default(0),
+  EXTRACT_RATE_LIMIT_REQUEST_WINDOW_SECONDS: z.coerce
+    .number()
+    .min(0)
+    .default(0),
+  EXTRACT_RATE_LIMIT_MAX_INPUT_TPM: z.coerce.number().min(0).default(0),
+  EXTRACT_RATE_LIMIT_MAX_OUTPUT_TPM: z.coerce.number().min(0).default(0),
+  ACCESS_TOKEN: z.string().optional().default(""),
+});
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error("[env] Invalid environment variables:", parsed.error.format());
+  throw new Error("Invalid environment variables");
 }
 
-/** Warn if extraction env is partially configured */
-function validateEnv(): void {
-  const vars = {
-    EXTRACT_BASE_URL: process.env.EXTRACT_BASE_URL,
-    EXTRACT_MODEL_ID: process.env.EXTRACT_MODEL_ID,
-    EXTRACT_API_KEY: process.env.EXTRACT_API_KEY,
-  };
-  const set = Object.entries(vars).filter(([, v]) => Boolean(v));
-  const missing = Object.entries(vars).filter(([, v]) => !v);
-
-  if (set.length > 0 && missing.length > 0) {
-    console.warn(
-      `[env] Incomplete extraction config: ${missing.map(([k]) => k).join(", ")} not set. ` +
-        `Set all three variables or none.`,
-    );
-  }
-}
-
-validateEnv();
+const env = parsed.data;
 
 /** Server-side extraction config from environment */
 export const extractEnv = {
   get baseUrl(): string {
-    return requireEnvOrEmpty("EXTRACT_BASE_URL");
+    return env.EXTRACT_BASE_URL;
   },
   get modelId(): string {
-    return requireEnvOrEmpty("EXTRACT_MODEL_ID");
+    return env.EXTRACT_MODEL_ID;
   },
   get apiKey(): string {
-    return requireEnvOrEmpty("EXTRACT_API_KEY");
+    return env.EXTRACT_API_KEY;
   },
   get isConfigured(): boolean {
     return Boolean(this.baseUrl && this.modelId && this.apiKey);
   },
   get rateLimitMaxRequests(): number {
-    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_REQUESTS) || 0;
+    return env.EXTRACT_RATE_LIMIT_MAX_REQUESTS;
   },
   get rateLimitRequestWindowSeconds(): number {
-    return Number(process.env.EXTRACT_RATE_LIMIT_REQUEST_WINDOW_SECONDS) || 0;
+    return env.EXTRACT_RATE_LIMIT_REQUEST_WINDOW_SECONDS;
   },
   get rateLimitMaxInputTPM(): number {
-    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_INPUT_TPM) || 0;
+    return env.EXTRACT_RATE_LIMIT_MAX_INPUT_TPM;
   },
   get rateLimitMaxOutputTPM(): number {
-    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_OUTPUT_TPM) || 0;
+    return env.EXTRACT_RATE_LIMIT_MAX_OUTPUT_TPM;
+  },
+  get accessToken(): string {
+    return env.ACCESS_TOKEN;
   },
 } as const;

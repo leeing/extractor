@@ -1,21 +1,33 @@
 import OpenAI from "openai";
+import { z } from "zod";
+import { verifyAuth } from "@/lib/auth";
 import { extractEnv } from "@/lib/env";
 
 export const maxDuration = 120;
 
-/** Request body shape for the extract endpoint */
-interface ExtractRequestBody {
-  imageBase64: string;
-  baseUrl?: string;
-  modelId?: string;
-  apiKey?: string;
-  customPrompt?: string;
-}
+const extractBodySchema = z.object({
+  imageBase64: z.string().min(1),
+  baseUrl: z.string().optional().default(""),
+  modelId: z.string().optional().default(""),
+  apiKey: z.string().optional().default(""),
+  customPrompt: z.string().max(5000).optional().default(""),
+});
 
 export async function POST(req: Request): Promise<Response> {
-  let body: ExtractRequestBody;
+  const authResponse = verifyAuth(req);
+  if (authResponse) return authResponse;
+
+  let body: z.infer<typeof extractBodySchema>;
   try {
-    body = (await req.json()) as ExtractRequestBody;
+    const raw: unknown = await req.json();
+    const result = extractBodySchema.safeParse(raw);
+    if (!result.success) {
+      return Response.json(
+        { success: false, error: "请求参数不合法" },
+        { status: 400 },
+      );
+    }
+    body = result.data;
   } catch {
     return Response.json(
       { success: false, error: "Invalid JSON body" },
@@ -26,7 +38,7 @@ export async function POST(req: Request): Promise<Response> {
   const { imageBase64, customPrompt } = body;
 
   const MAX_BASE64_SIZE = 20 * 1024 * 1024; // ~20MB base64 ≈ ~15MB decoded
-  if (imageBase64 && imageBase64.length > MAX_BASE64_SIZE) {
+  if (imageBase64.length > MAX_BASE64_SIZE) {
     return Response.json(
       { success: false, error: "Image too large. Maximum 15MB per page." },
       { status: 413 },
@@ -38,7 +50,7 @@ export async function POST(req: Request): Promise<Response> {
   const modelId = body.modelId || extractEnv.modelId;
   const apiKey = body.apiKey || extractEnv.apiKey;
 
-  if (!imageBase64 || !baseUrl || !modelId || !apiKey) {
+  if (!baseUrl || !modelId || !apiKey) {
     return Response.json(
       {
         success: false,
@@ -78,11 +90,6 @@ export async function POST(req: Request): Promise<Response> {
       ],
     });
 
-    // Convert OpenAI stream to a ReadableStream of plain text chunks.
-    // If the LLM stream errors mid-way, we write a sentinel error line
-    // into the stream so the client can detect it, instead of calling
-    // controller.error() which abruptly kills the connection and causes
-    // an opaque "Failed to fetch" TypeError on the client side.
     const readable = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -94,13 +101,11 @@ export async function POST(req: Request): Promise<Response> {
             if (text) {
               controller.enqueue(encoder.encode(text));
             }
-            // The last chunk with usage info (when stream_options.include_usage is set)
             if (chunk.usage) {
               promptTokens = chunk.usage.prompt_tokens;
               completionTokens = chunk.usage.completion_tokens;
             }
           }
-          // Append usage sentinel if we got usage data
           if (promptTokens > 0 || completionTokens > 0) {
             controller.enqueue(
               encoder.encode(
@@ -108,10 +113,9 @@ export async function POST(req: Request): Promise<Response> {
               ),
             );
           }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "LLM 流式响应中断";
+        } catch {
           controller.enqueue(
-            encoder.encode(`\n\n<!--EXTRACT_STREAM_ERROR:${msg}-->`),
+            encoder.encode("\n\n<!--EXTRACT_STREAM_ERROR:LLM 流式响应中断-->"),
           );
         } finally {
           controller.close();
@@ -125,8 +129,10 @@ export async function POST(req: Request): Promise<Response> {
         "Transfer-Encoding": "chunked",
       },
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "LLM API 调用失败";
-    return Response.json({ success: false, error: message }, { status: 502 });
+  } catch {
+    return Response.json(
+      { success: false, error: "LLM API 调用失败" },
+      { status: 502 },
+    );
   }
 }

@@ -22,6 +22,7 @@ function makeEnvConfig(rateLimit?: EnvConfig["rateLimit"]): EnvConfig {
     modelId: "env-model",
     hasApiKey: true,
     isConfigured: true,
+    requiresAuth: false,
     rateLimit,
   };
 }

@@ -5,6 +5,7 @@
 
 import mammoth from "mammoth";
 import TurndownService from "turndown";
+import { verifyAuth } from "@/lib/auth";
 
 export const maxDuration = 60;
 
@@ -64,6 +65,9 @@ function createTurndown(): TurndownService {
 const turndown = createTurndown();
 
 export async function POST(req: Request): Promise<Response> {
+  const authResponse = verifyAuth(req);
+  if (authResponse) return authResponse;
+
   try {
     const formData = await req.formData();
     const file = formData.get("file");
@@ -104,12 +108,9 @@ export async function POST(req: Request): Promise<Response> {
         messages: result.messages.map((m) => `${m.type}: ${m.message}`),
       },
     });
-  } catch (err) {
+  } catch {
     return Response.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "DOCX 转换失败",
-      },
+      { success: false, error: "DOCX 转换失败" },
       { status: 500 },
     );
   }

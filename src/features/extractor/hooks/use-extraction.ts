@@ -47,6 +47,7 @@ interface UseExtractionOptions {
   hasAnyConfig: boolean;
   activeConfig: ModelConfig | null;
   envConfig: EnvConfig | null;
+  accessToken: string;
   onConfigMissing: () => void;
 }
 
@@ -116,6 +117,7 @@ export function useExtraction({
   hasAnyConfig,
   activeConfig,
   envConfig,
+  accessToken,
   onConfigMissing,
 }: UseExtractionOptions): UseExtractionReturn {
   const [step, setStep] = useState<Step>("upload");
@@ -135,6 +137,8 @@ export function useExtraction({
   hasAnyConfigRef.current = hasAnyConfig;
   const activeConfigRef = useRef(activeConfig);
   activeConfigRef.current = activeConfig;
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
   const abortControllerRef = useRef<AbortController | null>(null);
   const pageResultsRef = useRef<PageResult[]>([]);
   const extractionImagesRef = useRef<string[]>([]);
@@ -155,9 +159,17 @@ export function useExtraction({
       const decoded = currentConfig ? getDecodedConfig(currentConfig) : null;
 
       try {
+        const fetchHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        const currentToken = accessTokenRef.current;
+        if (currentToken) {
+          fetchHeaders.Authorization = `Bearer ${currentToken}`;
+        }
+
         const response = await fetch("/api/extract", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: fetchHeaders,
           body: JSON.stringify({
             imageBase64: imageDataUrl,
             baseUrl: decoded?.baseUrl ?? "",
@@ -481,8 +493,15 @@ export function useExtraction({
       const formData = new FormData();
       formData.append("file", file);
 
+      const docxHeaders: Record<string, string> = {};
+      const currentToken = accessTokenRef.current;
+      if (currentToken) {
+        docxHeaders.Authorization = `Bearer ${currentToken}`;
+      }
+
       const response = await fetch("/api/convert-docx", {
         method: "POST",
+        headers: docxHeaders,
         body: formData,
       });
 
