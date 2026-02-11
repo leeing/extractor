@@ -83,3 +83,33 @@ src/
 | `pnpm build` | 生产构建 |
 | `pnpm lint` | Biome lint |
 | `pnpm format` | Biome format |
+
+## 部署 (Windows / Linux 内网)
+
+本项目使用 Next.js **standalone 模式**，在有外网的机器上构建后，将产物复制到内网目标机器运行。
+
+> ⚠️ **目标机器仅需 Node.js (>=18)**，无需 pnpm/npm，无需访问外网。
+
+### 1. 在开发机 (macOS) 上构建打包
+
+```bash
+bash deploy.sh
+# → 生成 dist/extractor-standalone.zip
+```
+
+### 2. 复制到目标机器并部署
+
+```bash
+# 将 zip 复制到目标机器后:
+unzip extractor-standalone.zip
+cd standalone
+
+# 配置环境变量
+cp .env.local.example .env.local  # 编辑填入 API 配置
+
+# 启动
+bash deploy.sh --run
+# 或直接: PORT=3000 node server.js
+```
+
+
