@@ -9,11 +9,18 @@
 - [x] DOCX：服务端使用 mammoth + turndown 直接转换，无需 LLM
 - [x] 所有提取结果支持逐页预览、复制、下载
 - [x] PDF 渲染最多 50 页（OOM 保护）
-- [x] 文件大小限制 100MB（所有类型）
+- [x] 文件大小限制：PDF/图片 100MB，DOCX 20MB
 - [x] LLM 调用使用流式响应，实时展示提取进度
 - [x] PDF 上传后进入页码选择步骤，用户可选择要提取的页码范围
 - [x] 提取过程中可随时停止，保留已提取结果
 - [x] 提取失败或跳过的页面支持单页重试
+
+## API 安全规则
+- [x] 所有 API 端点（extract、config、convert-docx）经过 Token 鉴权（`ACCESS_TOKEN` 设置时）
+- [x] `/api/extract` 请求体通过 Zod schema 校验：`imageBase64` 必填，`customPrompt` 最大 5000 字符，`baseUrl` 最大 500，`modelId` 最大 200，`apiKey` 最大 500
+- [x] `/api/convert-docx` 校验 ZIP 魔数（PK 签名）+ 扩展名大小写不敏感
+- [x] 所有 API catch 块错误脱敏（不暴露 `err.message`），服务端 `console.error` 记录完整错误
+- [x] LLM 流式错误 sentinel 也已脱敏
 
 ## 数据流
 
@@ -60,7 +67,7 @@ pending → extracting → success
 | 场景 | 预期行为 |
 |------|----------|
 | PDF 超过 50 页 | 仅渲染前 50 页，控制台 warn |
-| 文件超过 100MB | 显示错误提示，阻止上传 |
+| 文件超过限制 | PDF/图片 100MB、DOCX 20MB，显示错误提示，阻止上传 |
 | LLM API 配置缺失 | 弹出设置对话框 |
 | LLM 调用失败 | 在对应页显示错误信息和重试按钮，继续处理后续页 |
 | 同一文件重复上传 | input 已重置，可正常触发 |
@@ -77,6 +84,7 @@ pending → extracting → success
 ## 变更记录
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
+| 2026-02-11 | 新增 API 安全规则章节；DOCX 限制 20MB；文件超限描述更新 | 安全加固 |
 | 2026-02-11 | 新增页码选择、停止提取、单页重试规则；新增 PageResult 状态机 | 提取流程增强 |
 | 2026-02-10 | 添加文件名规则 | 下载文件名功能 |
 | 2026-02-10 | 初始版本 | 项目审查后补充 |
