@@ -29,7 +29,8 @@ export const DEFAULT_EXTRACT_PROMPT = `你是一个专业的文档解析助手�
 4. 使用原始 Unicode 符号（如 ≤ ≥ ± × ÷ ≈ ≠），不要转成 LaTeX 数学公式；仅对复杂数学公式使用 LaTeX
 5. 忽略页眉、页脚、页码、水印等非正文内容
 6. 保持原文语言，不要翻译
-7. 只输出 Markdown 内容，不要添加额外的解释或说明`;
+7. 只输出 Markdown 内容，不要添加额外的解释或说明
+8. 直接输出 Markdown 原文，禁止用 \`\`\`markdown 代码块包裹`;
 
 /** Preset model configurations for quick setup */
 export const MODEL_PRESETS: Omit<ModelConfig, "id" | "apiKey" | "isActive">[] =

@@ -94,11 +94,15 @@ export function ExtractorPage() {
             </h1>
           </button>
           <div className="flex items-center gap-3">
-            {activeConfig && (
+            {activeConfig ? (
               <span className="hidden sm:inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                 {activeConfig.name}
               </span>
-            )}
+            ) : envConfig?.isConfigured ? (
+              <span className="hidden sm:inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                {envConfig.modelId}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -155,12 +159,6 @@ export function ExtractorPage() {
               </div>
             )}
 
-            {envConfig?.isConfigured && !activeConfig && (
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                ✅ 已检测到环境变量配置：{envConfig.modelId}
-                （可在设置中自定义覆盖）
-              </div>
-            )}
 
             <FileUpload
               onPagesRendered={handlePagesRendered}

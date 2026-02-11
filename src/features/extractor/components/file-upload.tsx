@@ -17,9 +17,9 @@ const ACCEPTED_IMAGE_TYPES = [
 ];
 
 interface FileUploadProps {
-  onPagesRendered: (pages: RenderedPage[]) => void;
+  onPagesRendered: (pages: RenderedPage[], fileName: string) => void;
   onDocxUploaded: (file: File) => void;
-  onImageUploaded: (dataUrl: string) => void;
+  onImageUploaded: (dataUrl: string, fileName: string) => void;
   isProcessing: boolean;
   abortSignal?: AbortSignal;
 }
@@ -71,7 +71,7 @@ export function FileUpload({
         reader.onload = () => {
           setProgress(null);
           if (typeof reader.result === "string") {
-            onImageUploaded(reader.result);
+            onImageUploaded(reader.result, file.name);
           }
         };
         reader.onerror = () => {
@@ -98,7 +98,7 @@ export function FileUpload({
           abortSignal,
         );
 
-        onPagesRendered(pages);
+        onPagesRendered(pages, file.name);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
@@ -159,8 +159,8 @@ export function FileUpload({
           "relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center",
           "rounded-2xl border-2 border-dashed p-8 transition-all duration-300",
           isDragging
-            ? "border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-950/20"
-            : "border-zinc-300 bg-zinc-50/50 hover:border-blue-300 hover:bg-blue-50/30 dark:border-zinc-700 dark:bg-zinc-900/50 dark:hover:border-blue-600",
+            ? "border-blue-400 bg-blue-50/50"
+            : "border-zinc-300 bg-zinc-50/50 hover:border-blue-300 hover:bg-blue-50/30",
           isProcessing && "pointer-events-none opacity-60",
         )}
       >
@@ -176,10 +176,10 @@ export function FileUpload({
         {progress ? (
           <div className="flex flex-col items-center gap-3">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-zinc-600">
               正在渲染第 {progress.current} / {progress.total} 页...
             </p>
-            <div className="h-2 w-48 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+            <div className="h-2 w-48 overflow-hidden rounded-full bg-zinc-200">
               <div
                 className="h-full rounded-full bg-blue-500 transition-all duration-300"
                 style={{
@@ -205,11 +205,11 @@ export function FileUpload({
               />
             </svg>
             <div className="text-center">
-              <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+              <p className="text-base font-medium text-zinc-700">
                 拖拽文件到此处，或{" "}
                 <span className="text-blue-500">点击选择</span>
               </p>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+              <p className="mt-1 text-xs text-zinc-500">
                 支持 PDF、Word (.docx)、图片 (PNG/JPG/WEBP)，最大 100MB
               </p>
             </div>
@@ -218,7 +218,7 @@ export function FileUpload({
       </div>
 
       {error && (
-        <div className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
+        <div className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
           {error}
         </div>
       )}

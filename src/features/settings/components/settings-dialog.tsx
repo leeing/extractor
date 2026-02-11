@@ -120,20 +120,20 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
-        className="relative mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900"
+        className="relative mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
           <h2
             id="settings-dialog-title"
-            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+            className="text-lg font-semibold text-zinc-900"
           >
             模型配置
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
           >
             <svg
               className="h-5 w-5"
@@ -156,13 +156,13 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           {editingConfig ? (
             /* Edit Form */
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <h3 className="text-sm font-medium text-zinc-700">
                 {editingId ? "编辑配置" : "新增配置"}
               </h3>
 
               {!editingId && (
                 <div>
-                  <span className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="mb-1 block text-xs text-zinc-500">
                     快速选择预设
                   </span>
                   <div className="flex flex-wrap gap-2">
@@ -171,7 +171,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         key={preset.modelId}
                         type="button"
                         onClick={() => handlePreset(preset)}
-                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-blue-600 dark:hover:bg-blue-950/30"
+                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-blue-300 hover:bg-blue-50"
                       >
                         {preset.name}
                       </button>
@@ -183,7 +183,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               <div>
                 <label
                   htmlFor="config-name"
-                  className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400"
+                  className="mb-1 block text-xs text-zinc-500"
                 >
                   配置名称
                 </label>
@@ -195,14 +195,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     setEditingConfig({ ...editingConfig, name: e.target.value })
                   }
                   placeholder="例如: Qwen-VL 生产"
-                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-600 dark:text-zinc-100"
+                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="config-baseurl"
-                  className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400"
+                  className="mb-1 block text-xs text-zinc-500"
                 >
                   Base URL
                 </label>
@@ -217,14 +217,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     })
                   }
                   placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-600 dark:text-zinc-100"
+                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="config-modelid"
-                  className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400"
+                  className="mb-1 block text-xs text-zinc-500"
                 >
                   Model ID
                 </label>
@@ -239,14 +239,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     })
                   }
                   placeholder="qwen-vl-plus"
-                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-600 dark:text-zinc-100"
+                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="config-apikey"
-                  className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400"
+                  className="mb-1 block text-xs text-zinc-500"
                 >
                   API Key
                 </label>
@@ -262,12 +262,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       })
                     }
                     placeholder="sk-..."
-                    className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 pr-10 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-600 dark:text-zinc-100"
+                    className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 pr-10 text-sm font-mono text-zinc-900 outline-none focus:border-blue-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
                   >
                     {showApiKey ? "🙈" : "👁️"}
                   </button>
@@ -277,7 +277,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               <div>
                 <label
                   htmlFor="config-prompt"
-                  className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400"
+                  className="mb-1 block text-xs text-zinc-500"
                 >
                   自定义提示词
                 </label>
@@ -291,7 +291,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     })
                   }
                   rows={6}
-                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-600 dark:text-zinc-100"
+                  className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -299,7 +299,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
                 >
                   取消
                 </button>
@@ -322,8 +322,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             /* Config List */
             <div className="space-y-4">
               {configs.length === 0 ? (
-                <div className="rounded-xl border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                <div className="rounded-xl border-2 border-dashed border-zinc-200 p-8 text-center">
+                  <p className="text-sm text-zinc-500">
                     暂无模型配置，请添加一个
                   </p>
                 </div>
@@ -335,22 +335,22 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       className={clsx(
                         "flex items-center justify-between rounded-xl border p-4 transition-colors",
                         config.isActive
-                          ? "border-blue-300 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-950/20"
-                          : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/50",
+                          ? "border-blue-300 bg-blue-50/50"
+                          : "border-zinc-200 hover:bg-zinc-50",
                       )}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">
+                          <span className="font-medium text-sm text-zinc-900">
                             {config.name}
                           </span>
                           {config.isActive && (
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
                               当前
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 truncate text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                        <p className="mt-0.5 truncate text-xs font-mono text-zinc-500">
                           {config.modelId} • {config.baseUrl}
                         </p>
                       </div>
@@ -359,7 +359,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                           <button
                             type="button"
                             onClick={() => setActiveConfig(config.id)}
-                            className="rounded-lg px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                            className="rounded-lg px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
                           >
                             激活
                           </button>
@@ -367,7 +367,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         <button
                           type="button"
                           onClick={() => handleEdit(config)}
-                          className="rounded-lg px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                          className="rounded-lg px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100"
                         >
                           编辑
                         </button>
@@ -382,7 +382,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                               deleteConfig(config.id);
                             }
                           }}
-                          className="rounded-lg px-2 py-1 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          className="rounded-lg px-2 py-1 text-xs text-red-500 hover:bg-red-50"
                         >
                           删除
                         </button>
@@ -395,7 +395,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               <button
                 type="button"
                 onClick={handleAddNew}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3 text-sm font-medium text-zinc-600 transition-colors hover:border-blue-400 hover:text-blue-600 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-400"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3 text-sm font-medium text-zinc-600 transition-colors hover:border-blue-400 hover:text-blue-600"
               >
                 <svg
                   className="h-4 w-4"
