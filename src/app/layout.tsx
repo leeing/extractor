@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Document Extractor — PDF to Markdown",
+  title: "文档智能提取",
   description:
     "使用多模态大模型将 PDF 文档智能转换为 Markdown 格式。支持 Qwen-VL、GPT-4o、Gemini 等模型。",
 };

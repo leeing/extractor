@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FileUpload } from "@/features/extractor/components/file-upload";
 import { PageRangeSelector } from "@/features/extractor/components/page-range-selector";
 import { ResultPanel } from "@/features/extractor/components/result-panel";
@@ -8,8 +8,33 @@ import { useExtraction } from "@/features/extractor/hooks/use-extraction";
 import { SettingsDialog } from "@/features/settings/components/settings-dialog";
 import { useModelConfig } from "@/features/settings/context";
 
+/** Live countdown banner for rate limit waits */
+function RateLimitCountdown({ waitUntil }: { waitUntil: number }) {
+  const [remaining, setRemaining] = useState(
+    Math.max(0, Math.ceil((waitUntil - Date.now()) / 1000)),
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const left = Math.max(0, Math.ceil((waitUntil - Date.now()) / 1000));
+      setRemaining(left);
+      if (left <= 0) clearInterval(id);
+    }, 200);
+    return () => clearInterval(id);
+  }, [waitUntil]);
+
+  if (remaining <= 0) return null;
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+      限流等待中，{remaining} 秒后继续提取...
+    </div>
+  );
+}
+
 export function ExtractorPage() {
-  const { activeConfig, hasAnyConfig, envConfig } = useModelConfig();
+  const { activeConfig, hasAnyConfig, envConfig, isReady } = useModelConfig();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const {
@@ -21,6 +46,7 @@ export function ExtractorPage() {
     isExtracting,
     streamingMarkdown,
     totalPages,
+    rateLimitWaitUntil,
     handlePagesRendered,
     handleImageUploaded,
     handleDocxUploaded,
@@ -31,6 +57,7 @@ export function ExtractorPage() {
   } = useExtraction({
     hasAnyConfig,
     activeConfig,
+    envConfig,
     onConfigMissing: () => setSettingsOpen(true),
   });
 
@@ -90,7 +117,7 @@ export function ExtractorPage() {
               E
             </div>
             <h1 className="text-lg font-semibold text-zinc-900">
-              Document Extractor
+              文档智能提取
             </h1>
           </button>
           <div className="flex items-center gap-3">
@@ -138,14 +165,7 @@ export function ExtractorPage() {
         {/* Step: Upload */}
         {step === "upload" && (
           <div className="mx-auto max-w-2xl space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-zinc-900">文档智能提取</h2>
-              <p className="mt-2 text-sm text-zinc-500">
-                上传 PDF、Word (.docx) 或图片，智能转换为 Markdown
-              </p>
-            </div>
-
-            {!hasAnyConfig && (
+            {isReady && !hasAnyConfig && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 ⚠️ PDF / 图片提取需要先配置 LLM 模型。请{" "}
                 <button
@@ -158,7 +178,6 @@ export function ExtractorPage() {
                 或设置 .env.local 环境变量（Word 文档无需配置）
               </div>
             )}
-
 
             <FileUpload
               onPagesRendered={handlePagesRendered}
@@ -231,6 +250,11 @@ export function ExtractorPage() {
               </div>
             </div>
 
+            {/* Rate limit wait indicator */}
+            {rateLimitWaitUntil !== null && (
+              <RateLimitCountdown waitUntil={rateLimitWaitUntil} />
+            )}
+
             {/* Show results per page */}
             {hasResults && (
               <div className="space-y-4">
@@ -256,6 +280,11 @@ export function ExtractorPage() {
           </div>
         )}
       </main>
+
+      {/* Footer */}
+      <footer className="py-4 text-center text-xs text-zinc-400">
+        上传文档或图片，智能转换为 Markdown
+      </footer>
     </>
   );
 }

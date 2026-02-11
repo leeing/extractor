@@ -2,8 +2,11 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { RenderedPage } from "@/features/extractor/services/pdf-renderer";
+import { RateLimiter, sleep } from "@/features/extractor/services/rate-limiter";
+import type { EnvConfig } from "@/features/settings/context";
 import { getDecodedConfig } from "@/features/settings/context";
-import type { ModelConfig } from "@/features/settings/types";
+import type { ModelConfig, RateLimitConfig } from "@/features/settings/types";
+import { hasRateLimitEnabled } from "@/features/settings/types";
 
 /** Pipeline step */
 export type Step = "upload" | "select" | "extract" | "done";
@@ -26,6 +29,7 @@ export interface PageResult {
   status: PageStatus;
   markdown: string;
   errorMessage?: string | undefined;
+  usage?: { promptTokens: number; completionTokens: number } | undefined;
 }
 
 function stripExtension(name: string): string {
@@ -42,6 +46,7 @@ interface DocxApiResponse {
 interface UseExtractionOptions {
   hasAnyConfig: boolean;
   activeConfig: ModelConfig | null;
+  envConfig: EnvConfig | null;
   onConfigMissing: () => void;
 }
 
@@ -55,6 +60,7 @@ interface UseExtractionReturn {
   isExtracting: boolean;
   streamingMarkdown: string;
   totalPages: number;
+  rateLimitWaitUntil: number | null;
   handlePagesRendered: (
     renderedPages: RenderedPage[],
     originalFileName: string,
@@ -67,6 +73,38 @@ interface UseExtractionReturn {
   handleReset: () => void;
 }
 
+/** Merge rate limit: model config > env config > no limit */
+export function resolveRateLimit(
+  activeConfig: ModelConfig | null,
+  envConfig: EnvConfig | null,
+): RateLimitConfig | undefined {
+  if (activeConfig?.rateLimit && hasRateLimitEnabled(activeConfig.rateLimit)) {
+    return activeConfig.rateLimit;
+  }
+  if (envConfig?.rateLimit && hasRateLimitEnabled(envConfig.rateLimit)) {
+    return envConfig.rateLimit;
+  }
+  return undefined;
+}
+
+/** Parse usage sentinel from stream tail, return usage + cleaned markdown */
+export function parseUsageSentinel(raw: string): {
+  markdown: string;
+  usage?: { promptTokens: number; completionTokens: number };
+} {
+  const match = raw.match(
+    /\n<!--EXTRACT_USAGE:\{"prompt_tokens":(\d+),"completion_tokens":(\d+)\}-->\s*$/,
+  );
+  if (!match) return { markdown: raw };
+  return {
+    markdown: raw.slice(0, match.index),
+    usage: {
+      promptTokens: Number(match[1]),
+      completionTokens: Number(match[2]),
+    },
+  };
+}
+
 /**
  * Hook encapsulating all extraction logic:
  * - LLM-based page-by-page extraction for PDF/image
@@ -77,6 +115,7 @@ interface UseExtractionReturn {
 export function useExtraction({
   hasAnyConfig,
   activeConfig,
+  envConfig,
   onConfigMissing,
 }: UseExtractionOptions): UseExtractionReturn {
   const [step, setStep] = useState<Step>("upload");
@@ -87,6 +126,9 @@ export function useExtraction({
   const [isExtracting, setIsExtracting] = useState(false);
   const [streamingMarkdown, setStreamingMarkdown] = useState("");
   const [fileName, setFileName] = useState("");
+  const [rateLimitWaitUntil, setRateLimitWaitUntil] = useState<number | null>(
+    null,
+  );
 
   // Refs to avoid stale closures
   const hasAnyConfigRef = useRef(hasAnyConfig);
@@ -173,11 +215,16 @@ export function useExtraction({
           };
         }
 
+        // Parse usage sentinel appended by API route
+        const { markdown: cleanMarkdown, usage } =
+          parseUsageSentinel(pageMarkdown);
+
         return {
           imageIndex,
           pageNumber,
           status: "success",
-          markdown: pageMarkdown,
+          markdown: cleanMarkdown,
+          usage,
         };
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -206,6 +253,10 @@ export function useExtraction({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
+      // Resolve rate limit config (model config > env > none)
+      const rlConfig = resolveRateLimit(activeConfigRef.current, envConfig);
+      const limiter = rlConfig ? new RateLimiter(rlConfig) : null;
+
       // Build initial pageResults array
       const initialResults: PageResult[] = selectedIndices.map((imgIdx) => ({
         imageIndex: imgIdx,
@@ -218,6 +269,7 @@ export function useExtraction({
 
       setIsExtracting(true);
       setExtractingIdx(0);
+      setRateLimitWaitUntil(null);
       setStep("extract");
 
       for (let i = 0; i < selectedIndices.length; i++) {
@@ -227,6 +279,24 @@ export function useExtraction({
         if (imgIdx === undefined) continue;
         setExtractingIdx(i);
         setStreamingMarkdown("");
+
+        // Rate limit: wait if needed
+        if (limiter) {
+          const waitMs = limiter.getWaitTimeMs();
+          if (waitMs > 0) {
+            setRateLimitWaitUntil(Date.now() + waitMs);
+            try {
+              await sleep(waitMs, controller.signal);
+            } catch (err) {
+              if (err instanceof DOMException && err.name === "AbortError") {
+                return;
+              }
+            }
+            setRateLimitWaitUntil(null);
+          }
+        }
+
+        if (controller.signal.aborted) break;
 
         // Mark current page as extracting
         const updatingResults = [...pageResultsRef.current];
@@ -248,6 +318,9 @@ export function useExtraction({
             (md) => setStreamingMarkdown(md),
           );
 
+          // Record request with usage for rate limiter
+          limiter?.recordRequest(result.usage);
+
           const afterResults = [...pageResultsRef.current];
           afterResults[i] = result;
           setPageResults(afterResults);
@@ -261,10 +334,11 @@ export function useExtraction({
       }
 
       setStreamingMarkdown("");
+      setRateLimitWaitUntil(null);
       setIsExtracting(false);
       setStep("done");
     },
-    [onConfigMissing, extractSinglePage],
+    [onConfigMissing, extractSinglePage, envConfig],
   );
 
   /** Stop ongoing extraction — preserve completed results, mark rest as skipped */
@@ -282,6 +356,7 @@ export function useExtraction({
     pageResultsRef.current = updated;
 
     setStreamingMarkdown("");
+    setRateLimitWaitUntil(null);
     setIsExtracting(false);
     setStep("done");
   }, []);
@@ -465,6 +540,7 @@ export function useExtraction({
     setStreamingMarkdown("");
     setExtractingIdx(0);
     setIsExtracting(false);
+    setRateLimitWaitUntil(null);
   }, []);
 
   const totalPages = Math.max(
@@ -483,6 +559,7 @@ export function useExtraction({
     isExtracting,
     streamingMarkdown,
     totalPages,
+    rateLimitWaitUntil,
     handlePagesRendered,
     handleImageUploaded,
     handleDocxUploaded,

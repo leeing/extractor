@@ -55,6 +55,7 @@ export async function POST(req: Request): Promise<Response> {
     const stream = await client.chat.completions.create({
       model: modelId,
       stream: true,
+      stream_options: { include_usage: true },
       messages: [
         {
           role: "user",
@@ -85,12 +86,27 @@ export async function POST(req: Request): Promise<Response> {
     const readable = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        let promptTokens = 0;
+        let completionTokens = 0;
         try {
           for await (const chunk of stream) {
             const text = chunk.choices[0]?.delta?.content;
             if (text) {
               controller.enqueue(encoder.encode(text));
             }
+            // The last chunk with usage info (when stream_options.include_usage is set)
+            if (chunk.usage) {
+              promptTokens = chunk.usage.prompt_tokens;
+              completionTokens = chunk.usage.completion_tokens;
+            }
+          }
+          // Append usage sentinel if we got usage data
+          if (promptTokens > 0 || completionTokens > 0) {
+            controller.enqueue(
+              encoder.encode(
+                `\n<!--EXTRACT_USAGE:{"prompt_tokens":${promptTokens},"completion_tokens":${completionTokens}}-->`,
+              ),
+            );
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : "LLM 流式响应中断";

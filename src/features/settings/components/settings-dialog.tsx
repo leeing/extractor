@@ -295,6 +295,143 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 />
               </div>
 
+              {/* Rate Limit Settings (collapsible) */}
+              <details className="rounded-lg border border-zinc-200">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-zinc-600 select-none hover:bg-zinc-50">
+                  限流设置 (可选)
+                </summary>
+                <div className="space-y-3 border-t border-zinc-200 px-3 py-3">
+                  <p className="text-[11px] text-zinc-400">
+                    留空或填 0 表示不限制
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label
+                        htmlFor="rl-max-requests"
+                        className="mb-1 block text-xs text-zinc-500"
+                      >
+                        最大请求数
+                      </label>
+                      <input
+                        id="rl-max-requests"
+                        type="number"
+                        min={0}
+                        value={editingConfig.rateLimit?.maxRequests ?? ""}
+                        onChange={(e) => {
+                          const v =
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value);
+                          setEditingConfig({
+                            ...editingConfig,
+                            rateLimit: {
+                              ...editingConfig.rateLimit,
+                              maxRequests: v,
+                            },
+                          });
+                        }}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="rl-window"
+                        className="mb-1 block text-xs text-zinc-500"
+                      >
+                        窗口 (秒)
+                      </label>
+                      <input
+                        id="rl-window"
+                        type="number"
+                        min={0}
+                        value={
+                          editingConfig.rateLimit?.requestWindowSeconds ?? ""
+                        }
+                        onChange={(e) => {
+                          const v =
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value);
+                          setEditingConfig({
+                            ...editingConfig,
+                            rateLimit: {
+                              ...editingConfig.rateLimit,
+                              requestWindowSeconds: v,
+                            },
+                          });
+                        }}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="rl-input-tpm"
+                        className="mb-1 block text-xs text-zinc-500"
+                      >
+                        输入 Token/分
+                      </label>
+                      <input
+                        id="rl-input-tpm"
+                        type="number"
+                        min={0}
+                        value={
+                          editingConfig.rateLimit?.maxInputTokensPerMinute ?? ""
+                        }
+                        onChange={(e) => {
+                          const v =
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value);
+                          setEditingConfig({
+                            ...editingConfig,
+                            rateLimit: {
+                              ...editingConfig.rateLimit,
+                              maxInputTokensPerMinute: v,
+                            },
+                          });
+                        }}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="rl-output-tpm"
+                        className="mb-1 block text-xs text-zinc-500"
+                      >
+                        输出 Token/分
+                      </label>
+                      <input
+                        id="rl-output-tpm"
+                        type="number"
+                        min={0}
+                        value={
+                          editingConfig.rateLimit?.maxOutputTokensPerMinute ??
+                          ""
+                        }
+                        onChange={(e) => {
+                          const v =
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value);
+                          setEditingConfig({
+                            ...editingConfig,
+                            rateLimit: {
+                              ...editingConfig.rateLimit,
+                              maxOutputTokensPerMinute: v,
+                            },
+                          });
+                        }}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </details>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

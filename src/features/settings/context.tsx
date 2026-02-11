@@ -8,7 +8,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import type { ModelConfig } from "./types";
+import type { ModelConfig, RateLimitConfig } from "./types";
 import { DEFAULT_EXTRACT_PROMPT } from "./types";
 
 const STORAGE_KEY = "extractor_model_configs";
@@ -35,6 +35,7 @@ export interface EnvConfig {
   modelId: string;
   hasApiKey: boolean;
   isConfigured: boolean;
+  rateLimit?: RateLimitConfig | undefined;
 }
 
 interface ModelConfigContextValue {
@@ -43,6 +44,8 @@ interface ModelConfigContextValue {
   envConfig: EnvConfig | null;
   /** True if env or user config is available for extraction */
   hasAnyConfig: boolean;
+  /** True after env config check has completed (prevents flash of "no config" warning) */
+  isReady: boolean;
   addConfig: (config: Omit<ModelConfig, "id">) => void;
   updateConfig: (id: string, updates: Partial<ModelConfig>) => void;
   deleteConfig: (id: string) => void;
@@ -86,6 +89,7 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [envConfig, setEnvConfig] = useState<EnvConfig | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [envConfigLoaded, setEnvConfigLoaded] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -102,7 +106,8 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
       })
       .catch((err: unknown) => {
         console.error("Failed to fetch env config:", err);
-      });
+      })
+      .finally(() => setEnvConfigLoaded(true));
   }, []);
 
   // Persist to localStorage on change
@@ -170,6 +175,7 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
   const activeConfig = configs.find((c) => c.isActive) ?? null;
   const hasAnyConfig =
     Boolean(activeConfig) || Boolean(envConfig?.isConfigured);
+  const isReady = isLoaded && envConfigLoaded;
 
   return (
     <ModelConfigContext.Provider
@@ -178,6 +184,7 @@ export function ModelConfigProvider({ children }: { children: ReactNode }) {
         activeConfig,
         envConfig,
         hasAnyConfig,
+        isReady,
         addConfig,
         updateConfig,
         deleteConfig,

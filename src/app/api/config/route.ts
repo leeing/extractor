@@ -12,6 +12,12 @@ export async function GET(): Promise<Response> {
       modelId: extractEnv.modelId,
       hasApiKey: Boolean(extractEnv.apiKey),
       isConfigured: extractEnv.isConfigured,
+      rateLimit: {
+        maxRequests: extractEnv.rateLimitMaxRequests,
+        requestWindowSeconds: extractEnv.rateLimitRequestWindowSeconds,
+        maxInputTokensPerMinute: extractEnv.rateLimitMaxInputTPM,
+        maxOutputTokensPerMinute: extractEnv.rateLimitMaxOutputTPM,
+      },
     },
   });
 }

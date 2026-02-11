@@ -43,4 +43,16 @@ export const extractEnv = {
   get isConfigured(): boolean {
     return Boolean(this.baseUrl && this.modelId && this.apiKey);
   },
+  get rateLimitMaxRequests(): number {
+    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_REQUESTS) || 0;
+  },
+  get rateLimitRequestWindowSeconds(): number {
+    return Number(process.env.EXTRACT_RATE_LIMIT_REQUEST_WINDOW_SECONDS) || 0;
+  },
+  get rateLimitMaxInputTPM(): number {
+    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_INPUT_TPM) || 0;
+  },
+  get rateLimitMaxOutputTPM(): number {
+    return Number(process.env.EXTRACT_RATE_LIMIT_MAX_OUTPUT_TPM) || 0;
+  },
 } as const;
