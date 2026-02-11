@@ -76,6 +76,8 @@ src/
 - **泛型 `catch (e)` 吞错误**：只捕获具体预期异常，其余向上抛出
 - **Biome 规则不足**：确保 `suspicious` + `correctness` + `style` 规则组全部启用
 - **`.references()` 声明外键**：数据库无 REFERENCES 权限，禁止在 Schema 列定义中使用 `.references()`；关联关系通过 Drizzle `relations()` API 在应用层维护
+- **`next/font/google` 外部字体**：内网部署无法访问 Google Fonts CDN，必须使用 `geist` npm 包 + `next/font/local`（从 `geist/font/sans`、`geist/font/mono` 导入）
+- **任何外部 CDN/远程资源**：内网环境无法连接互联网，所有字体、脚本、样式、图片必须本地化（npm 包或 `public/` 目录）
 
 ---
 
@@ -131,7 +133,8 @@ pnpm build                    # 确认构建通过
 
 ## 7. 项目特有陷阱
 
-<!-- 在此记录项目踩过的坑 -->
+- **Google Fonts 导致内网部署失败**：`next/font/google` 在构建/运行时请求 `fonts.googleapis.com`，内网无法访问。已改用 `geist` npm 包（`geist/font/sans`、`geist/font/mono`），字体文件随 `node_modules` 安装，完全离线可用。
+- **Next.js `maxDuration` 必须是静态常量**：`export const maxDuration` 是 segment config，Next.js 在编译时静态分析，不能从环境变量或运行时函数赋值。
 
 ---
 
@@ -139,6 +142,7 @@ pnpm build                    # 确认构建通过
 
 | 日期 | 版本 | 变更内容 |
 |------|------|----------|
+| 2026-02-11 | 2.3.0 | §3 新增内网部署禁止项（Google Fonts、外部 CDN）+ §7 新增两条陷阱记录 |
 | 2026-02-09 | 2.2.0 | §3 新增外键禁止项 + §6 外键从"建议"改为"禁止"（无 REFERENCES 权限） |
 | 2026-02-08 | 2.1.0 | §3 新增 4 条禁止项 + §4 Commit Gate → Auto Gate |
 | 2026-02-08 | 2.0.0 | 大幅精简：代码示例迁移到 skills，删除教程内容 |

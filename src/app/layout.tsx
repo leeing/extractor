@@ -1,17 +1,8 @@
+import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { ModelConfigProvider } from "@/features/settings/context";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "文档智能提取",
@@ -27,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-zinc-50 font-sans antialiased`}
+        className={`${GeistSans.variable} ${GeistMono.variable} min-h-screen bg-zinc-50 font-sans antialiased`}
       >
         <ModelConfigProvider>{children}</ModelConfigProvider>
       </body>
