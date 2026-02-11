@@ -7,9 +7,9 @@ export const maxDuration = 120;
 
 const extractBodySchema = z.object({
   imageBase64: z.string().min(1),
-  baseUrl: z.string().optional().default(""),
-  modelId: z.string().optional().default(""),
-  apiKey: z.string().optional().default(""),
+  baseUrl: z.string().max(500).optional().default(""),
+  modelId: z.string().max(200).optional().default(""),
+  apiKey: z.string().max(500).optional().default(""),
   customPrompt: z.string().max(5000).optional().default(""),
 });
 
@@ -113,7 +113,8 @@ export async function POST(req: Request): Promise<Response> {
               ),
             );
           }
-        } catch {
+        } catch (error) {
+          console.error("[extract] LLM stream error:", error);
           controller.enqueue(
             encoder.encode("\n\n<!--EXTRACT_STREAM_ERROR:LLM 流式响应中断-->"),
           );
@@ -129,7 +130,8 @@ export async function POST(req: Request): Promise<Response> {
         "Transfer-Encoding": "chunked",
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("[extract] LLM API call failed:", error);
     return Response.json(
       { success: false, error: "LLM API 调用失败" },
       { status: 502 },

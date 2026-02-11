@@ -79,17 +79,32 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const MAX_DOCX_SIZE = 100 * 1024 * 1024; // 100MB
+    const MAX_DOCX_SIZE = 20 * 1024 * 1024; // 20MB
     if (file.size > MAX_DOCX_SIZE) {
       return Response.json(
-        { success: false, error: "File too large. Maximum 100MB." },
+        { success: false, error: "File too large. Maximum 20MB." },
         { status: 413 },
       );
     }
 
-    if (!file.name.endsWith(".docx")) {
+    if (!file.name.toLowerCase().endsWith(".docx")) {
       return Response.json(
         { success: false, error: "仅支持 .docx 格式" },
+        { status: 400 },
+      );
+    }
+
+    // Validate DOCX magic bytes (ZIP signature: PK\x03\x04)
+    const headerBuffer = await file.slice(0, 4).arrayBuffer();
+    const header = new Uint8Array(headerBuffer);
+    if (
+      header[0] !== 0x50 ||
+      header[1] !== 0x4b ||
+      header[2] !== 0x03 ||
+      header[3] !== 0x04
+    ) {
+      return Response.json(
+        { success: false, error: "文件格式无效，请上传有效的 .docx 文件" },
         { status: 400 },
       );
     }
@@ -108,7 +123,8 @@ export async function POST(req: Request): Promise<Response> {
         messages: result.messages.map((m) => `${m.type}: ${m.message}`),
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("[convert-docx] DOCX conversion failed:", error);
     return Response.json(
       { success: false, error: "DOCX 转换失败" },
       { status: 500 },
