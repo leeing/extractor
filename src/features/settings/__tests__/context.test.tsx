@@ -143,7 +143,7 @@ describe("ModelConfigProvider", () => {
       result.current.updateConfig("uuid-1", { name: "Updated Config" });
     });
 
-    expect(result.current.configs[0]!.name).toBe("Updated Config");
+    expect(result.current.configs[0]?.name).toBe("Updated Config");
   });
 
   it("deletes a config", async () => {
@@ -202,15 +202,15 @@ describe("ModelConfigProvider", () => {
     });
 
     expect(result.current.configs).toHaveLength(2);
-    expect(result.current.configs[0]!.isActive).toBe(true);
-    expect(result.current.configs[1]!.isActive).toBe(false);
+    expect(result.current.configs[0]?.isActive).toBe(true);
+    expect(result.current.configs[1]?.isActive).toBe(false);
 
     act(() => {
       result.current.setActiveConfig("uuid-2");
     });
 
-    expect(result.current.configs[0]!.isActive).toBe(false);
-    expect(result.current.configs[1]!.isActive).toBe(true);
+    expect(result.current.configs[0]?.isActive).toBe(false);
+    expect(result.current.configs[1]?.isActive).toBe(true);
   });
 
   it("handles access token and refetches config", async () => {

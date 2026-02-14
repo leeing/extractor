@@ -1,3 +1,4 @@
+import net from "node:net";
 import OpenAI from "openai";
 import { z } from "zod";
 import { verifyAuth } from "@/lib/auth";
@@ -12,6 +13,70 @@ const extractBodySchema = z.object({
   apiKey: z.string().max(500).optional().default(""),
   customPrompt: z.string().max(5000).optional().default(""),
 });
+
+/**
+ * Validate URL to prevent SSRF (Server-Side Request Forgery).
+ * Blocks loopback, private IPs, and link-local addresses.
+ */
+export function isValidBaseUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return false;
+    }
+
+    let hostname = parsed.hostname;
+
+    // Handle IPv6 brackets
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      hostname = hostname.slice(1, -1);
+    }
+
+    // Block localhost explicitly
+    if (hostname === "localhost") return false;
+
+    // If it's an IP address, check against private ranges
+    if (net.isIP(hostname)) {
+      // IPv4
+      if (net.isIPv4(hostname)) {
+        // 127.0.0.0/8 (Loopback)
+        if (hostname.startsWith("127.")) return false;
+        // 10.0.0.0/8 (Private)
+        if (hostname.startsWith("10.")) return false;
+        // 172.16.0.0/12 (Private)
+        // 172.16.x.x - 172.31.x.x
+        if (hostname.startsWith("172.")) {
+          const secondOctet = Number(hostname.split(".")[1]);
+          if (secondOctet >= 16 && secondOctet <= 31) return false;
+        }
+        // 192.168.0.0/16 (Private)
+        if (hostname.startsWith("192.168.")) return false;
+        // 169.254.0.0/16 (Link-local)
+        if (hostname.startsWith("169.254.")) return false;
+        // 0.0.0.0/8
+        if (hostname.startsWith("0.")) return false;
+      }
+
+      // IPv6
+      if (net.isIPv6(hostname)) {
+        // ::1 (Loopback)
+        if (hostname === "::1") return false;
+        // fc00::/7 (Unique Local)
+        if (
+          hostname.toLowerCase().startsWith("fc") ||
+          hostname.toLowerCase().startsWith("fd")
+        )
+          return false;
+        // fe80::/10 (Link-local)
+        if (hostname.toLowerCase().startsWith("fe80:")) return false;
+      }
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request): Promise<Response> {
   const authResponse = verifyAuth(req);
@@ -57,6 +122,14 @@ export async function POST(req: Request): Promise<Response> {
         error:
           "Missing required config. Set EXTRACT_BASE_URL, EXTRACT_MODEL_ID, EXTRACT_API_KEY in .env.local or provide via settings.",
       },
+      { status: 400 },
+    );
+  }
+
+  // Validate Base URL to prevent SSRF
+  if (!isValidBaseUrl(baseUrl)) {
+    return Response.json(
+      { success: false, error: "Base URL 不合法或不允许访问私有网络" },
       { status: 400 },
     );
   }
